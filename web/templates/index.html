@@ -1,0 +1,309 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ESP32-CAM Feed | Robot Gesture Control</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg-dark: #0b0f17;
+      --card-bg: rgba(18, 24, 38, 0.85);
+      --card-border: rgba(255, 255, 255, 0.08);
+      --accent-cyan: #06b6d4;
+      --accent-emerald: #10b981;
+      --accent-rose: #f43f5e;
+      --accent-amber: #f59e0b;
+      --text-main: #f1f5f9;
+      --text-muted: #94a3b8;
+      --font-ui: 'Outfit', -apple-system, BlinkMacSystemFont, sans-serif;
+      --font-mono: 'JetBrains Mono', monospace;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      background-color: var(--bg-dark);
+      background-image: 
+        radial-gradient(circle at 15% 15%, rgba(6, 182, 212, 0.08) 0%, transparent 40%),
+        radial-gradient(circle at 85% 85%, rgba(16, 185, 129, 0.06) 0%, transparent 40%);
+      color: var(--text-main);
+      font-family: var(--font-ui);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 24px 16px;
+    }
+
+    header {
+      width: 100%;
+      max-width: 960px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 24px;
+      padding-bottom: 16px;
+      border-bottom: 1px solid var(--card-border);
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .brand-icon {
+      width: 36px;
+      height: 36px;
+      border-radius: 10px;
+      background: linear-gradient(135deg, var(--accent-cyan), #3b82f6);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 700;
+      color: #fff;
+      box-shadow: 0 4px 14px rgba(6, 182, 212, 0.3);
+    }
+
+    .brand-title {
+      font-size: 1.25rem;
+      font-weight: 700;
+      letter-spacing: -0.02em;
+      color: #fff;
+    }
+
+    .brand-subtitle {
+      font-size: 0.8rem;
+      color: var(--text-muted);
+      font-family: var(--font-mono);
+    }
+
+    .status-pill {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 6px 14px;
+      border-radius: 9999px;
+      background: rgba(255, 255, 255, 0.04);
+      border: 1px solid var(--card-border);
+      font-size: 0.85rem;
+      font-weight: 500;
+      transition: all 0.3s ease;
+    }
+
+    .status-dot {
+      width: 9px;
+      height: 9px;
+      border-radius: 50%;
+      background: var(--accent-amber);
+      box-shadow: 0 0 10px var(--accent-amber);
+      transition: all 0.3s ease;
+    }
+
+    .status-pill.online .status-dot {
+      background: var(--accent-emerald);
+      box-shadow: 0 0 10px var(--accent-emerald);
+    }
+
+    .status-pill.offline .status-dot {
+      background: var(--accent-rose);
+      box-shadow: 0 0 10px var(--accent-rose);
+    }
+
+    main {
+      width: 100%;
+      max-width: 960px;
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+    }
+
+    .stream-container {
+      position: relative;
+      width: 100%;
+      aspect-ratio: 4 / 3;
+      max-height: 600px;
+      background: #000;
+      border-radius: 16px;
+      overflow: hidden;
+      border: 1px solid var(--card-border);
+      box-shadow: 0 20px 40px -15px rgba(0, 0, 0, 0.7);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .stream-img {
+      width: 100%;
+      height: 100%;
+      object-fit: contain;
+      display: block;
+    }
+
+    .stream-overlay-badge {
+      position: absolute;
+      top: 14px;
+      left: 14px;
+      display: flex;
+      gap: 8px;
+      z-index: 10;
+    }
+
+    .overlay-tag {
+      background: rgba(11, 15, 23, 0.75);
+      backdrop-filter: blur(8px);
+      padding: 4px 10px;
+      border-radius: 6px;
+      font-size: 0.75rem;
+      font-family: var(--font-mono);
+      color: var(--text-main);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+    }
+
+    .stats-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+      gap: 16px;
+    }
+
+    .stat-card {
+      background: var(--card-bg);
+      backdrop-filter: blur(12px);
+      border: 1px solid var(--card-border);
+      border-radius: 12px;
+      padding: 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      transition: transform 0.2s ease, border-color 0.2s ease;
+    }
+
+    .stat-card:hover {
+      border-color: rgba(6, 182, 212, 0.3);
+      transform: translateY(-2px);
+    }
+
+    .stat-label {
+      font-size: 0.75rem;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: var(--text-muted);
+      font-weight: 600;
+    }
+
+    .stat-value {
+      font-size: 1.15rem;
+      font-weight: 600;
+      color: #fff;
+      font-family: var(--font-mono);
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .stream-url-value {
+      font-size: 0.85rem;
+    }
+
+    footer {
+      margin-top: 32px;
+      text-align: center;
+      font-size: 0.8rem;
+      color: var(--text-muted);
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="brand">
+      <div class="brand-icon">RC</div>
+      <div>
+        <h1 class="brand-title">robot-gesture-control</h1>
+        <div class="brand-subtitle">Milestone 1: ESP32-CAM Stream Gateway</div>
+      </div>
+    </div>
+    <div id="statusPill" class="status-pill">
+      <span class="status-dot"></span>
+      <span id="statusText">Connecting...</span>
+    </div>
+  </header>
+
+  <main>
+    <div class="stream-container">
+      <div class="stream-overlay-badge">
+        <span class="overlay-tag" id="liveBadge">LIVE FEED</span>
+        <span class="overlay-tag" id="fpsBadge">-- FPS</span>
+      </div>
+      <img id="videoFeed" class="stream-img" src="/video_feed" alt="ESP32-CAM Stream">
+    </div>
+
+    <div class="stats-grid">
+      <div class="stat-card">
+        <span class="stat-label">Stream Source</span>
+        <span id="statSource" class="stat-value stream-url-value">--</span>
+      </div>
+      <div class="stat-card">
+        <span class="stat-label">Resolution</span>
+        <span id="statResolution" class="stat-value">--</span>
+      </div>
+      <div class="stat-card">
+        <span class="stat-label">Stream FPS</span>
+        <span id="statFps" class="stat-value">--</span>
+      </div>
+      <div class="stat-card">
+        <span class="stat-label">Connection State</span>
+        <span id="statMessage" class="stat-value">Checking...</span>
+      </div>
+    </div>
+  </main>
+
+  <footer>
+    ESP32-CAM → Windows OpenCV → Flask Gateway
+  </footer>
+
+  <script>
+    async function updateStatus() {
+      try {
+        const res = await fetch('/status');
+        if (!res.ok) throw new Error('Status endpoint returned ' + res.status);
+        const data = await res.json();
+
+        const pill = document.getElementById('statusPill');
+        const statusText = document.getElementById('statusText');
+        const statSource = document.getElementById('statSource');
+        const statResolution = document.getElementById('statResolution');
+        const statFps = document.getElementById('statFps');
+        const statMessage = document.getElementById('statMessage');
+        const fpsBadge = document.getElementById('fpsBadge');
+
+        statSource.textContent = data.stream_url || '--';
+        statResolution.textContent = data.resolution || '--';
+        statFps.textContent = (data.fps || 0) + ' fps';
+        statMessage.textContent = data.status_message || '--';
+        fpsBadge.textContent = (data.fps || 0) + ' FPS';
+
+        pill.classList.remove('online', 'offline');
+        if (data.is_connected) {
+          pill.classList.add('online');
+          statusText.textContent = 'ESP32 Connected';
+        } else {
+          pill.classList.add('offline');
+          statusText.textContent = data.status_message || 'Connecting...';
+        }
+      } catch (err) {
+        console.error('Status fetch error:', err);
+      }
+    }
+
+    setInterval(updateStatus, 1500);
+    updateStatus();
+  </script>
+</body>
+</html>
