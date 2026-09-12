@@ -1,3 +1,4 @@
+﻿import logging
 import os
 import sys
 from pathlib import Path
@@ -11,6 +12,12 @@ if str(PROJECT_ROOT) not in sys.path:
 
 # Load .env from project root
 load_dotenv(PROJECT_ROOT / ".env")
+
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
+    datefmt="%H:%M:%S",
+)
 
 from backend.camera import CameraStream
 

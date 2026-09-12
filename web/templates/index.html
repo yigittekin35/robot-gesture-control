@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
@@ -250,11 +250,11 @@
         <span id="statSource" class="stat-value stream-url-value">--</span>
       </div>
       <div class="stat-card">
-        <span class="stat-label">Resolution</span>
+        <span class="stat-label">Input Resolution</span>
         <span id="statResolution" class="stat-value">--</span>
       </div>
       <div class="stat-card">
-        <span class="stat-label">Stream FPS</span>
+        <span class="stat-label">Camera / Web FPS</span>
         <span id="statFps" class="stat-value">--</span>
       </div>
       <div class="stat-card">
@@ -285,9 +285,9 @@
 
         statSource.textContent = data.stream_url || '--';
         statResolution.textContent = data.resolution || '--';
-        statFps.textContent = (data.fps || 0) + ' fps';
+        const camFps = data.camera_fps ?? data.fps ?? 0; const bFps = data.browser_fps ?? 0; statFps.textContent = `${camFps} / ${bFps} fps`;
         statMessage.textContent = data.status_message || '--';
-        fpsBadge.textContent = (data.fps || 0) + ' FPS';
+        fpsBadge.textContent = `${data.camera_fps ?? data.fps ?? 0} FPS`;
 
         pill.classList.remove('online', 'offline');
         if (data.is_connected) {
@@ -307,3 +307,4 @@
   </script>
 </body>
 </html>
+
