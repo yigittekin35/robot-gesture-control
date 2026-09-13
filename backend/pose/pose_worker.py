@@ -84,7 +84,8 @@ class PoseWorker:
         self._last_camera_frame_time = 0.0
 
         # CLAHE instance for contrast enhancement
-        self._clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8))
+        # CLAHE removed to avoid amplifying JPEG compression noise
+        self._consecutive_no_pose = 0
 
     def start(self) -> "PoseWorker":
         """Initialize MediaPipe and start processing thread."""
@@ -98,9 +99,9 @@ class PoseWorker:
             base_options=base_options,
             output_segmentation_masks=False,
             running_mode=vision.RunningMode.IMAGE,
-            min_pose_detection_confidence=0.25,
-            min_pose_presence_confidence=0.25,
-            min_tracking_confidence=0.25,
+            min_pose_detection_confidence=0.10,
+            min_pose_presence_confidence=0.10,
+            min_tracking_confidence=0.10,
         )
         self._detector = vision.PoseLandmarker.create_from_options(options)
 
@@ -180,25 +181,23 @@ class PoseWorker:
         annotated = frame.copy()
         h, w = frame.shape[:2]
 
-        # 1. 2x upscale (e.g. 320x240 -> 640x480) so distant human silhouettes enter detector anchor receptive field
+        # 1. 2x bicubic upscale for receptive field matching with natural RGB gradients
         upscaled = cv2.resize(frame, (w * 2, h * 2), interpolation=cv2.INTER_CUBIC)
-
-        # 2. Contrast enhancement via CLAHE on L-channel (helps dim indoor lighting at distance)
-        lab = cv2.cvtColor(upscaled, cv2.COLOR_BGR2LAB)
-        l_chan, a_chan, b_chan = cv2.split(lab)
-        cl = self._clahe.apply(l_chan)
-        enhanced_lab = cv2.merge((cl, a_chan, b_chan))
-        enhanced_bgr = cv2.cvtColor(enhanced_lab, cv2.COLOR_LAB2BGR)
-        rgb_frame = cv2.cvtColor(enhanced_bgr, cv2.COLOR_BGR2RGB)
+        rgb_frame = cv2.cvtColor(upscaled, cv2.COLOR_BGR2RGB)
 
         mp_image = mp.Image(image_format=mp.ImageFormat.SRGB, data=rgb_frame)
         results = self._detector.detect(mp_image)
 
         if not results.pose_landmarks or len(results.pose_landmarks) == 0:
-            self._state_history.append("NO POSE")
+            self._consecutive_no_pose += 1
+            if self._consecutive_no_pose >= 2:
+                self._state_history.append("NO POSE")
             smoothed_state = self._get_smoothed_state()
-            self._draw_hud(annotated, False, smoothed_state, 0.0)
-            return annotated, False, smoothed_state, 0.0
+            is_detected = (smoothed_state != "NO POSE")
+            self._draw_hud(annotated, is_detected, smoothed_state, 0.0)
+            return annotated, is_detected, smoothed_state, 0.0
+
+        self._consecutive_no_pose = 0
 
         landmarks = results.pose_landmarks[0]
 
@@ -218,7 +217,7 @@ class PoseWorker:
             v1 = getattr(lm1, "visibility", 1.0) or 1.0
             v2 = getattr(lm2, "visibility", 1.0) or 1.0
 
-            if v1 > 0.15 and v2 > 0.15:
+            if v1 > 0.08 and v2 > 0.08:
                 x1, y1 = int(lm1.x * w), int(lm1.y * h)
                 x2, y2 = int(lm2.x * w), int(lm2.y * h)
                 cv2.line(annotated, (x1, y1), (x2, y2), (255, 200, 0), 2, cv2.LINE_AA)
@@ -227,7 +226,7 @@ class PoseWorker:
         for idx in ESSENTIAL_LANDMARKS:
             lm = landmarks[idx]
             v = getattr(lm, "visibility", 1.0) or 1.0
-            if v > 0.15:
+            if v > 0.08:
                 cx, cy = int(lm.x * w), int(lm.y * h)
                 if idx in (15, 16):  # Wrists highlighted in cyan/white
                     cv2.circle(annotated, (cx, cy), 5, (0, 255, 255), -1, cv2.LINE_AA)
@@ -235,17 +234,19 @@ class PoseWorker:
                 else:
                     cv2.circle(annotated, (cx, cy), 4, (16, 220, 100), -1, cv2.LINE_AA)
 
-        # Raised-hand diagnostic
-        # In MediaPipe normalized Y: smaller Y is HIGHER in image.
-        margin = 0.02  # ~5-6 pixels tolerance for distant kitchen poses
-
+        # Raised-hand diagnostic (perspective invariant)
         left_shoulder = landmarks[11]
         right_shoulder = landmarks[12]
+        left_elbow = landmarks[13]
+        right_elbow = landmarks[14]
         left_wrist = landmarks[15]
         right_wrist = landmarks[16]
 
-        left_up = (left_wrist.y < left_shoulder.y - margin)
-        right_up = (right_wrist.y < right_shoulder.y - margin)
+        # An arm is raised if:
+        # 1. Wrist is above shoulder
+        # 2. OR wrist is above elbow while elbow is around shoulder level
+        left_up = (left_wrist.y < left_shoulder.y) or (left_wrist.y < left_elbow.y and left_elbow.y < left_shoulder.y + 0.03)
+        right_up = (right_wrist.y < right_shoulder.y) or (right_wrist.y < right_elbow.y and right_elbow.y < right_shoulder.y + 0.03)
 
         if left_up and right_up:
             raw_state = "BOTH HANDS UP"
@@ -255,6 +256,17 @@ class PoseWorker:
             raw_state = "RIGHT HAND UP"
         else:
             raw_state = "POSE DETECTED"
+
+        # Highlight raised wrists with on-screen target circle and text badge
+        if left_up:
+            cx, cy = int(left_wrist.x * w), int(left_wrist.y * h)
+            cv2.circle(annotated, (cx, cy), 8, (0, 220, 255), 2, cv2.LINE_AA)
+            cv2.putText(annotated, "L-UP", (cx - 16, max(cy - 8, 12)), cv2.FONT_HERSHEY_SIMPLEX, 0.38, (0, 220, 255), 1, cv2.LINE_AA)
+
+        if right_up:
+            cx, cy = int(right_wrist.x * w), int(right_wrist.y * h)
+            cv2.circle(annotated, (cx, cy), 8, (0, 220, 255), 2, cv2.LINE_AA)
+            cv2.putText(annotated, "R-UP", (cx - 16, max(cy - 8, 12)), cv2.FONT_HERSHEY_SIMPLEX, 0.38, (0, 220, 255), 1, cv2.LINE_AA)
 
         self._state_history.append(raw_state)
         smoothed_state = self._get_smoothed_state()
