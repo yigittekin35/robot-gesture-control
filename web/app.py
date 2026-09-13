@@ -37,6 +37,12 @@ def index():
     return render_template("index.html")
 
 
+@app.route("/calibrate")
+def calibrate():
+    """Renders the Calibration Wizard v1 page."""
+    return render_template("calibrate.html")
+
+
 @app.route("/video_feed")
 def video_feed():
     """Video streaming route. Returns multipart MJPEG from CameraWorker."""

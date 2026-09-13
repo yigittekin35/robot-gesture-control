@@ -1,0 +1,737 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Calibration Wizard | Robot Gesture Control</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg-dark: #0b0f17;
+      --card-bg: rgba(18, 24, 38, 0.85);
+      --card-border: rgba(255, 255, 255, 0.08);
+      --accent-cyan: #06b6d4;
+      --accent-emerald: #10b981;
+      --accent-rose: #f43f5e;
+      --accent-amber: #f59e0b;
+      --text-main: #f1f5f9;
+      --text-muted: #94a3b8;
+      --font-ui: 'Outfit', -apple-system, BlinkMacSystemFont, sans-serif;
+      --font-mono: 'JetBrains Mono', monospace;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      background-color: var(--bg-dark);
+      background-image: 
+        radial-gradient(circle at 15% 15%, rgba(6, 182, 212, 0.08) 0%, transparent 40%),
+        radial-gradient(circle at 85% 85%, rgba(16, 185, 129, 0.06) 0%, transparent 40%);
+      color: var(--text-main);
+      font-family: var(--font-ui);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 24px 16px;
+    }
+
+    header {
+      width: 100%;
+      max-width: 1000px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 20px;
+      padding-bottom: 16px;
+      border-bottom: 1px solid var(--card-border);
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .brand-icon {
+      width: 36px;
+      height: 36px;
+      border-radius: 10px;
+      background: linear-gradient(135deg, var(--accent-cyan), #3b82f6);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 700;
+      color: #fff;
+      box-shadow: 0 4px 14px rgba(6, 182, 212, 0.3);
+    }
+
+    .brand-title {
+      font-size: 1.25rem;
+      font-weight: 700;
+      letter-spacing: -0.02em;
+      color: #fff;
+    }
+
+    .brand-subtitle {
+      font-size: 0.8rem;
+      color: var(--text-muted);
+      font-family: var(--font-mono);
+    }
+
+    .header-actions {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .nav-btn {
+      padding: 6px 14px;
+      border-radius: 8px;
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid var(--card-border);
+      color: var(--text-main);
+      text-decoration: none;
+      font-size: 0.85rem;
+      font-weight: 500;
+      transition: all 0.2s ease;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .nav-btn:hover {
+      background: rgba(255, 255, 255, 0.1);
+      border-color: var(--accent-cyan);
+      color: #fff;
+    }
+
+    .status-pill {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 6px 14px;
+      border-radius: 9999px;
+      background: rgba(255, 255, 255, 0.04);
+      border: 1px solid var(--card-border);
+      font-size: 0.85rem;
+      font-weight: 500;
+      transition: all 0.3s ease;
+    }
+
+    .status-dot {
+      width: 9px;
+      height: 9px;
+      border-radius: 50%;
+      background: var(--accent-amber);
+      box-shadow: 0 0 10px var(--accent-amber);
+    }
+
+    .status-pill.online .status-dot {
+      background: var(--accent-emerald);
+      box-shadow: 0 0 10px var(--accent-emerald);
+    }
+
+    .status-pill.offline .status-dot {
+      background: var(--accent-rose);
+      box-shadow: 0 0 10px var(--accent-rose);
+    }
+
+    main {
+      width: 100%;
+      max-width: 1000px;
+      display: grid;
+      grid-template-columns: 1fr 340px;
+      gap: 20px;
+      align-items: start;
+    }
+
+    @media (max-width: 860px) {
+      main {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    .feed-column {
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+    }
+
+    /* Fixed aspect ratio matching 400x296 source exactly */
+    .viewport-box {
+      position: relative;
+      width: 100%;
+      aspect-ratio: 400 / 296;
+      background: #000;
+      border-radius: 14px;
+      overflow: hidden;
+      border: 1px solid var(--card-border);
+      box-shadow: 0 15px 35px -10px rgba(0, 0, 0, 0.8);
+      user-select: none;
+      cursor: crosshair;
+    }
+
+    .camera-img {
+      width: 100%;
+      height: 100%;
+      display: block;
+      object-fit: fill; /* Perfectly fills the 400/296 box with zero padding */
+    }
+
+    .feed-overlay-badge {
+      position: absolute;
+      top: 12px;
+      left: 12px;
+      display: flex;
+      gap: 8px;
+      z-index: 20;
+      pointer-events: none;
+    }
+
+    .overlay-tag {
+      background: rgba(11, 15, 23, 0.75);
+      backdrop-filter: blur(8px);
+      padding: 4px 10px;
+      border-radius: 6px;
+      font-size: 0.75rem;
+      font-family: var(--font-mono);
+      color: var(--text-main);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+    }
+
+    /* Overlays layer */
+    .markers-container {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      pointer-events: none;
+      z-index: 10;
+    }
+
+    /* Active selection marker (crosshair) */
+    .active-reticle {
+      position: absolute;
+      transform: translate(-50%, -50%);
+      width: 28px;
+      height: 28px;
+      border: 2px solid var(--accent-cyan);
+      border-radius: 50%;
+      box-shadow: 0 0 14px rgba(6, 182, 212, 0.9), inset 0 0 8px rgba(6, 182, 212, 0.5);
+      pointer-events: none;
+      transition: transform 0.05s ease;
+      display: none;
+    }
+
+    .active-reticle::before {
+      content: '';
+      position: absolute;
+      top: 50%;
+      left: -6px;
+      right: -6px;
+      height: 1.5px;
+      background: var(--accent-cyan);
+      transform: translateY(-50%);
+    }
+
+    .active-reticle::after {
+      content: '';
+      position: absolute;
+      left: 50%;
+      top: -6px;
+      bottom: -6px;
+      width: 1.5px;
+      background: var(--accent-cyan);
+      transform: translateX(-50%);
+    }
+
+    /* Saved calibration point marker */
+    .saved-point-marker {
+      position: absolute;
+      transform: translate(-50%, -50%);
+      width: 22px;
+      height: 22px;
+      border-radius: 50%;
+      background: var(--accent-emerald);
+      color: #fff;
+      font-size: 0.75rem;
+      font-weight: 700;
+      font-family: var(--font-mono);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border: 2px solid #fff;
+      box-shadow: 0 0 12px rgba(16, 185, 129, 0.85);
+      pointer-events: none;
+    }
+
+    .side-column {
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+
+    .card {
+      background: var(--card-bg);
+      backdrop-filter: blur(12px);
+      border: 1px solid var(--card-border);
+      border-radius: 14px;
+      padding: 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .card-title {
+      font-size: 0.85rem;
+      font-weight: 600;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+      color: var(--text-muted);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .coord-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+    }
+
+    .coord-box {
+      background: rgba(0, 0, 0, 0.3);
+      border: 1px solid rgba(255, 255, 255, 0.05);
+      border-radius: 8px;
+      padding: 10px 12px;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+
+    .coord-label {
+      font-size: 0.7rem;
+      font-family: var(--font-mono);
+      color: var(--text-muted);
+    }
+
+    .coord-value {
+      font-size: 1.25rem;
+      font-weight: 700;
+      color: var(--accent-cyan);
+      font-family: var(--font-mono);
+    }
+
+    .normalized-row {
+      display: flex;
+      justify-content: space-between;
+      font-size: 0.8rem;
+      color: var(--text-muted);
+      font-family: var(--font-mono);
+      padding: 4px 6px;
+      background: rgba(255, 255, 255, 0.02);
+      border-radius: 6px;
+    }
+
+    .btn-group {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .btn {
+      width: 100%;
+      padding: 10px 16px;
+      border-radius: 8px;
+      font-family: var(--font-ui);
+      font-size: 0.9rem;
+      font-weight: 600;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      transition: all 0.2s ease;
+      border: none;
+    }
+
+    .btn-primary {
+      background: linear-gradient(135deg, var(--accent-cyan), #0284c7);
+      color: #fff;
+      box-shadow: 0 4px 12px rgba(6, 182, 212, 0.3);
+    }
+
+    .btn-primary:hover:not(:disabled) {
+      filter: brightness(1.1);
+      transform: translateY(-1px);
+    }
+
+    .btn-primary:disabled {
+      opacity: 0.4;
+      cursor: not-allowed;
+    }
+
+    .btn-secondary {
+      background: rgba(255, 255, 255, 0.06);
+      color: var(--text-main);
+      border: 1px solid var(--card-border);
+    }
+
+    .btn-secondary:hover:not(:disabled) {
+      background: rgba(244, 63, 94, 0.15);
+      border-color: rgba(244, 63, 94, 0.4);
+      color: #fff;
+    }
+
+    .points-list {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      max-height: 220px;
+      overflow-y: auto;
+    }
+
+    .point-item {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 8px 12px;
+      background: rgba(255, 255, 255, 0.03);
+      border: 1px solid rgba(255, 255, 255, 0.05);
+      border-radius: 8px;
+      font-family: var(--font-mono);
+      font-size: 0.85rem;
+    }
+
+    .point-tag {
+      font-weight: 700;
+      color: var(--accent-emerald);
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .point-tag-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--accent-emerald);
+    }
+
+    .empty-state {
+      padding: 18px 12px;
+      text-align: center;
+      color: var(--text-muted);
+      font-size: 0.85rem;
+      border: 1px dashed var(--card-border);
+      border-radius: 8px;
+    }
+
+    footer {
+      margin-top: 24px;
+      font-size: 0.8rem;
+      color: var(--text-muted);
+      text-align: center;
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="brand">
+      <div class="brand-icon">CW</div>
+      <div>
+        <h1 class="brand-title">Calibration Wizard</h1>
+        <div class="brand-subtitle">v1: Camera Coordinate Validation (400x296)</div>
+      </div>
+    </div>
+    <div class="header-actions">
+      <a href="/" class="nav-btn">&larr; Live Dashboard</a>
+      <div id="statusPill" class="status-pill">
+        <span class="status-dot"></span>
+        <span id="statusText">Connecting...</span>
+      </div>
+    </div>
+  </header>
+
+  <main>
+    <!-- Camera Viewport Column -->
+    <div class="feed-column">
+      <div class="viewport-box" id="viewportBox">
+        <div class="feed-overlay-badge">
+          <span class="overlay-tag" id="liveBadge">LIVE FEED</span>
+          <span class="overlay-tag">RES: 400x296</span>
+          <span class="overlay-tag" id="fpsBadge">-- FPS</span>
+        </div>
+        <img id="videoFeed" class="camera-img" src="/video_feed" alt="Camera Stream">
+        <div class="markers-container" id="markersOverlay">
+          <!-- Active Selection Reticle -->
+          <div class="active-reticle" id="activeReticle"></div>
+          <!-- Saved point badges injected here -->
+        </div>
+      </div>
+    </div>
+
+    <!-- Controls Column -->
+    <div class="side-column">
+      <!-- Selected Point Info Card -->
+      <div class="card">
+        <div class="card-title">
+          <span>Selected Point</span>
+          <span style="font-size: 0.75rem; color: var(--accent-cyan);">Click image</span>
+        </div>
+        
+        <div class="coord-grid">
+          <div class="coord-box">
+            <span class="coord-label">CAMERA X</span>
+            <span id="displayCamX" class="coord-value">--</span>
+          </div>
+          <div class="coord-box">
+            <span class="coord-label">CAMERA Y</span>
+            <span id="displayCamY" class="coord-value">--</span>
+          </div>
+        </div>
+
+        <div class="normalized-row">
+          <span>Normalized X:</span>
+          <span id="displayNormX">--</span>
+        </div>
+        <div class="normalized-row">
+          <span>Normalized Y:</span>
+          <span id="displayNormY">--</span>
+        </div>
+
+        <div class="btn-group">
+          <button id="btnAddPoint" class="btn btn-primary" disabled>
+            + Add Calibration Point
+          </button>
+          <button id="btnClearPoints" class="btn btn-secondary">
+            Clear Points
+          </button>
+        </div>
+      </div>
+
+      <!-- Collected Points List Card -->
+      <div class="card">
+        <div class="card-title">
+          <span>Calibration Points</span>
+          <span id="pointsCountBadge" style="font-family: var(--font-mono); font-size: 0.8rem; color: var(--accent-emerald);">0 points</span>
+        </div>
+        
+        <div class="points-list" id="pointsList">
+          <div class="empty-state" id="emptyState">
+            Click on the camera image to select coordinates, then click "Add Calibration Point".
+          </div>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <footer>
+    Calibration Wizard v1 &bull; ESP32-CAM (400x296) &bull; Coordinates in Camera Pixel Space
+  </footer>
+
+  <script>
+    // State
+    const CAMERA_WIDTH = 400;
+    const CAMERA_HEIGHT = 296;
+
+    let selectedPoint = null; // { x, y } in 400x296 space
+    const calibrationPoints = []; // Array of { id, x, y }
+
+    // Elements
+    const viewportBox = document.getElementById('viewportBox');
+    const videoFeed = document.getElementById('videoFeed');
+    const activeReticle = document.getElementById('activeReticle');
+    const markersOverlay = document.getElementById('markersOverlay');
+    const displayCamX = document.getElementById('displayCamX');
+    const displayCamY = document.getElementById('displayCamY');
+    const displayNormX = document.getElementById('displayNormX');
+    const displayNormY = document.getElementById('displayNormY');
+    const btnAddPoint = document.getElementById('btnAddPoint');
+    const btnClearPoints = document.getElementById('btnClearPoints');
+    const pointsList = document.getElementById('pointsList');
+    const emptyState = document.getElementById('emptyState');
+    const pointsCountBadge = document.getElementById('pointsCountBadge');
+
+    // Click handler for coordinate conversion
+    viewportBox.addEventListener('click', (e) => {
+      // Use bounding rect of the viewport/image element
+      const rect = viewportBox.getBoundingClientRect();
+      const displayX = e.clientX - rect.left;
+      const displayY = e.clientY - rect.top;
+
+      // Convert from rendered display pixels to original 400x296 camera space
+      let camX = Math.round((displayX / rect.width) * CAMERA_WIDTH);
+      let camY = Math.round((displayY / rect.height) * CAMERA_HEIGHT);
+
+      // Clamp safely
+      camX = Math.max(0, Math.min(CAMERA_WIDTH - 1, camX));
+      camY = Math.max(0, Math.min(CAMERA_HEIGHT - 1, camY));
+
+      selectedPoint = { x: camX, y: camY };
+      updateSelectedDisplay();
+      updateActiveReticle();
+    });
+
+    function updateSelectedDisplay() {
+      if (!selectedPoint) {
+        displayCamX.textContent = '--';
+        displayCamY.textContent = '--';
+        displayNormX.textContent = '--';
+        displayNormY.textContent = '--';
+        btnAddPoint.disabled = true;
+        return;
+      }
+
+      displayCamX.textContent = selectedPoint.x;
+      displayCamY.textContent = selectedPoint.y;
+      displayNormX.textContent = (selectedPoint.x / CAMERA_WIDTH).toFixed(3);
+      displayNormY.textContent = (selectedPoint.y / CAMERA_HEIGHT).toFixed(3);
+      btnAddPoint.disabled = false;
+    }
+
+    function updateActiveReticle() {
+      if (!selectedPoint) {
+        activeReticle.style.display = 'none';
+        return;
+      }
+
+      // Percentage positioning keeps marker perfectly aligned even across window resize
+      const leftPct = (selectedPoint.x / CAMERA_WIDTH) * 100;
+      const topPct = (selectedPoint.y / CAMERA_HEIGHT) * 100;
+
+      activeReticle.style.left = `${leftPct}%`;
+      activeReticle.style.top = `${topPct}%`;
+      activeReticle.style.display = 'block';
+    }
+
+    // Add Calibration Point
+    btnAddPoint.addEventListener('click', () => {
+      if (!selectedPoint) return;
+
+      // Duplicate check
+      const isDuplicate = calibrationPoints.some(
+        p => p.x === selectedPoint.x && p.y === selectedPoint.y
+      );
+
+      if (isDuplicate) {
+        alert(`Point (X: ${selectedPoint.x}, Y: ${selectedPoint.y}) has already been added.`);
+        return;
+      }
+
+      const pointId = calibrationPoints.length + 1;
+      calibrationPoints.push({
+        id: pointId,
+        x: selectedPoint.x,
+        y: selectedPoint.y,
+      });
+
+      renderPointsList();
+      renderSavedMarkers();
+    });
+
+    // Clear Points
+    btnClearPoints.addEventListener('click', () => {
+      calibrationPoints.length = 0;
+      selectedPoint = null;
+      updateSelectedDisplay();
+      updateActiveReticle();
+      renderPointsList();
+      renderSavedMarkers();
+    });
+
+    function renderPointsList() {
+      pointsCountBadge.textContent = `${calibrationPoints.length} point${calibrationPoints.length === 1 ? '' : 's'}`;
+
+      if (calibrationPoints.length === 0) {
+        emptyState.style.display = 'block';
+        // Clear all point items except emptyState
+        const items = pointsList.querySelectorAll('.point-item');
+        items.forEach(el => el.remove());
+        return;
+      }
+
+      emptyState.style.display = 'none';
+      // Re-render list
+      const items = pointsList.querySelectorAll('.point-item');
+      items.forEach(el => el.remove());
+
+      calibrationPoints.forEach(pt => {
+        const row = document.createElement('div');
+        row.className = 'point-item';
+        row.innerHTML = `
+          <span class="point-tag">
+            <span class="point-tag-dot"></span>
+            #${pt.id}
+          </span>
+          <span>X: <strong>${pt.x}</strong> &nbsp; Y: <strong>${pt.y}</strong></span>
+        `;
+        pointsList.appendChild(row);
+      });
+    }
+
+    function renderSavedMarkers() {
+      // Remove existing saved markers
+      const existing = markersOverlay.querySelectorAll('.saved-point-marker');
+      existing.forEach(el => el.remove());
+
+      // Create new markers
+      calibrationPoints.forEach(pt => {
+        const marker = document.createElement('div');
+        marker.className = 'saved-point-marker';
+        marker.textContent = pt.id;
+        marker.title = `#${pt.id} (X: ${pt.x}, Y: ${pt.y})`;
+
+        // Percentage positioning maintains perfect alignment on resize
+        const leftPct = (pt.x / CAMERA_WIDTH) * 100;
+        const topPct = (pt.y / CAMERA_HEIGHT) * 100;
+        marker.style.left = `${leftPct}%`;
+        marker.style.top = `${topPct}%`;
+
+        markersOverlay.appendChild(marker);
+      });
+    }
+
+    // Live status polling (uses same endpoint as dashboard)
+    async function updateStatus() {
+      try {
+        const res = await fetch('/status');
+        if (!res.ok) return;
+        const data = await res.json();
+
+        const pill = document.getElementById('statusPill');
+        const statusText = document.getElementById('statusText');
+        const fpsBadge = document.getElementById('fpsBadge');
+
+        const camFps = data.camera_fps ?? data.fps ?? 0;
+        fpsBadge.textContent = `${camFps} FPS`;
+
+        pill.classList.remove('online', 'offline');
+        if (data.is_connected && data.connection_state === 'Live') {
+          pill.classList.add('online');
+          statusText.textContent = 'Live (400x296)';
+        } else if (data.connection_state === 'Reconnecting') {
+          pill.classList.add('offline');
+          statusText.textContent = 'Reconnecting...';
+        } else {
+          pill.classList.add('offline');
+          statusText.textContent = data.connection_state || 'Offline';
+        }
+      } catch (err) {
+        console.error('Status error:', err);
+      }
+    }
+
+    setInterval(updateStatus, 1500);
+    updateStatus();
+  </script>
+</body>
+</html>
