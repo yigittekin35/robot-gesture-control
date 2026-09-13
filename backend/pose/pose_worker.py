@@ -1,4 +1,6 @@
-﻿"""Pose estimation and gesture diagnostic worker using MediaPipe PoseLandmarker."""
+﻿"""Pose estimation and gesture diagnostic worker using MediaPipe PoseLandmarker.
+Optimized for distant detection in low-resolution (320x240) indoor environments.
+"""
 import logging
 import os
 import threading
@@ -49,7 +51,6 @@ SKELETON_CONNECTIONS = [
 
 class PoseWorker:
     """Consumes frames from CameraWorker, runs MediaPipe pose detection,
-
     draws essential skeleton landmarks, diagnoses raised hands,
     and caches annotated JPEG frames for web streaming.
     """
@@ -82,6 +83,9 @@ class PoseWorker:
         self._annotated_jpeg: Optional[bytes] = None
         self._last_camera_frame_time = 0.0
 
+        # CLAHE instance for contrast enhancement
+        self._clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8))
+
     def start(self) -> "PoseWorker":
         """Initialize MediaPipe and start processing thread."""
         if self._running:
@@ -89,13 +93,14 @@ class PoseWorker:
 
         logger.info("Initializing MediaPipe PoseLandmarker from: %s", self.model_path)
         base_options = python.BaseOptions(model_asset_path=self.model_path)
+        # Optimized thresholds: 0.3 for distant and low-resolution kitchen silhouettes
         options = vision.PoseLandmarkerOptions(
             base_options=base_options,
             output_segmentation_masks=False,
             running_mode=vision.RunningMode.IMAGE,
-            min_pose_detection_confidence=0.5,
-            min_pose_presence_confidence=0.5,
-            min_tracking_confidence=0.5,
+            min_pose_detection_confidence=0.25,
+            min_pose_presence_confidence=0.25,
+            min_tracking_confidence=0.25,
         )
         self._detector = vision.PoseLandmarker.create_from_options(options)
 
@@ -128,7 +133,6 @@ class PoseWorker:
                 is_live = self.camera_worker.connected
 
             if not is_live or current_time == self._last_camera_frame_time:
-                # Wait briefly for a new camera frame
                 time.sleep(0.02)
                 continue
 
@@ -139,7 +143,6 @@ class PoseWorker:
                 continue
 
             self._last_camera_frame_time = current_time
-            t0 = time.time()
 
             # Process frame with MediaPipe
             annotated_frame, detected, state, conf = self._process_frame(frame)
@@ -171,14 +174,24 @@ class PoseWorker:
             self._new_annotated_event.set()
 
     def _process_frame(self, frame: np.ndarray) -> Tuple[np.ndarray, bool, str, float]:
-        """Detect pose, draw skeleton, determine gesture state, and overlay diagnostic text."""
+        """Detect pose, draw skeleton, determine gesture state, and overlay diagnostic text.
+        Includes distance super-resolution upscale & CLAHE contrast boost for distant kitchen detection.
+        """
         annotated = frame.copy()
         h, w = frame.shape[:2]
 
-        # Convert BGR to RGB for MediaPipe
-        rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-        mp_image = mp.Image(image_format=mp.ImageFormat.SRGB, data=rgb_frame)
+        # 1. 2x upscale (e.g. 320x240 -> 640x480) so distant human silhouettes enter detector anchor receptive field
+        upscaled = cv2.resize(frame, (w * 2, h * 2), interpolation=cv2.INTER_CUBIC)
 
+        # 2. Contrast enhancement via CLAHE on L-channel (helps dim indoor lighting at distance)
+        lab = cv2.cvtColor(upscaled, cv2.COLOR_BGR2LAB)
+        l_chan, a_chan, b_chan = cv2.split(lab)
+        cl = self._clahe.apply(l_chan)
+        enhanced_lab = cv2.merge((cl, a_chan, b_chan))
+        enhanced_bgr = cv2.cvtColor(enhanced_lab, cv2.COLOR_LAB2BGR)
+        rgb_frame = cv2.cvtColor(enhanced_bgr, cv2.COLOR_BGR2RGB)
+
+        mp_image = mp.Image(image_format=mp.ImageFormat.SRGB, data=rgb_frame)
         results = self._detector.detect(mp_image)
 
         if not results.pose_landmarks or len(results.pose_landmarks) == 0:
@@ -189,7 +202,7 @@ class PoseWorker:
 
         landmarks = results.pose_landmarks[0]
 
-        # Calculate average visibility/confidence for essential landmarks
+        # Average visibility/confidence for essential landmarks
         conf_values = [
             landmarks[idx].visibility
             for idx in ESSENTIAL_LANDMARKS
@@ -197,7 +210,7 @@ class PoseWorker:
         ]
         avg_conf = round(float(np.mean(conf_values)) * 100, 1) if conf_values else 0.0
 
-        # Draw skeleton connections (lines)
+        # Draw skeleton connections (lines) - threshold 0.2 for distant landmarks
         for idx1, idx2 in SKELETON_CONNECTIONS:
             lm1 = landmarks[idx1]
             lm2 = landmarks[idx2]
@@ -205,7 +218,7 @@ class PoseWorker:
             v1 = getattr(lm1, "visibility", 1.0) or 1.0
             v2 = getattr(lm2, "visibility", 1.0) or 1.0
 
-            if v1 > 0.4 and v2 > 0.4:
+            if v1 > 0.15 and v2 > 0.15:
                 x1, y1 = int(lm1.x * w), int(lm1.y * h)
                 x2, y2 = int(lm2.x * w), int(lm2.y * h)
                 cv2.line(annotated, (x1, y1), (x2, y2), (255, 200, 0), 2, cv2.LINE_AA)
@@ -214,10 +227,9 @@ class PoseWorker:
         for idx in ESSENTIAL_LANDMARKS:
             lm = landmarks[idx]
             v = getattr(lm, "visibility", 1.0) or 1.0
-            if v > 0.4:
+            if v > 0.15:
                 cx, cy = int(lm.x * w), int(lm.y * h)
-                # Wrists highlighted in bright cyan
-                if idx in (15, 16):
+                if idx in (15, 16):  # Wrists highlighted in cyan/white
                     cv2.circle(annotated, (cx, cy), 5, (0, 255, 255), -1, cv2.LINE_AA)
                     cv2.circle(annotated, (cx, cy), 7, (255, 255, 255), 1, cv2.LINE_AA)
                 else:
@@ -225,21 +237,15 @@ class PoseWorker:
 
         # Raised-hand diagnostic
         # In MediaPipe normalized Y: smaller Y is HIGHER in image.
-        # wrist_y < shoulder_y - margin
-        margin = 0.05
+        margin = 0.02  # ~5-6 pixels tolerance for distant kitchen poses
 
         left_shoulder = landmarks[11]
         right_shoulder = landmarks[12]
         left_wrist = landmarks[15]
         right_wrist = landmarks[16]
 
-        lv_s = getattr(left_shoulder, "visibility", 1.0) or 1.0
-        rv_s = getattr(right_shoulder, "visibility", 1.0) or 1.0
-        lv_w = getattr(left_wrist, "visibility", 1.0) or 1.0
-        rv_w = getattr(right_wrist, "visibility", 1.0) or 1.0
-
-        left_up = (lv_s > 0.4 and lv_w > 0.4) and (left_wrist.y < left_shoulder.y - margin)
-        right_up = (rv_s > 0.4 and rv_w > 0.4) and (right_wrist.y < right_shoulder.y - margin)
+        left_up = (left_wrist.y < left_shoulder.y - margin)
+        right_up = (right_wrist.y < right_shoulder.y - margin)
 
         if left_up and right_up:
             raw_state = "BOTH HANDS UP"
@@ -253,9 +259,7 @@ class PoseWorker:
         self._state_history.append(raw_state)
         smoothed_state = self._get_smoothed_state()
 
-        # Draw HUD on image
         self._draw_hud(annotated, True, smoothed_state, avg_conf)
-
         return annotated, True, smoothed_state, avg_conf
 
     def _get_smoothed_state(self) -> str:
@@ -265,31 +269,28 @@ class PoseWorker:
         counts = {}
         for s in self._state_history:
             counts[s] = counts.get(s, 0) + 1
-        # Return state with highest frequency, latest frame breaks ties
         return max(counts, key=lambda k: (counts[k], self._state_history[-1] == k))
 
     def _draw_hud(self, img: np.ndarray, detected: bool, state: str, conf: float) -> None:
         """Overlays a clean diagnostic badge directly on top of the annotated image."""
         h, w = img.shape[:2]
 
-        # Top diagnostic bar
-        cv2.rectangle(img, (0, 0), (w, 26), (15, 12, 10), -1)
+        cv2.rectangle(img, (0, 0), (w, 24), (15, 12, 10), -1)
 
-        # State color
         if state == "BOTH HANDS UP":
-            color = (0, 220, 255)  # Gold/Yellow
+            color = (0, 220, 255)
         elif "HAND UP" in state:
-            color = (255, 180, 0)  # Cyan
+            color = (255, 180, 0)
         elif detected:
-            color = (80, 220, 100)  # Green
+            color = (80, 220, 100)
         else:
-            color = (100, 100, 220)  # Red/Muted
+            color = (100, 100, 220)
 
-        cv2.putText(img, state, (8, 18), cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 2, cv2.LINE_AA)
+        cv2.putText(img, state, (8, 17), cv2.FONT_HERSHEY_SIMPLEX, 0.48, color, 2, cv2.LINE_AA)
 
         if detected:
             conf_text = f"Conf: {conf:.0f}%"
-            cv2.putText(img, conf_text, (w - 95, 18), cv2.FONT_HERSHEY_SIMPLEX, 0.45, (200, 200, 200), 1, cv2.LINE_AA)
+            cv2.putText(img, conf_text, (w - 85, 17), cv2.FONT_HERSHEY_SIMPLEX, 0.42, (200, 200, 200), 1, cv2.LINE_AA)
 
     def generate_pose_stream(self, max_fps: int = 30) -> Generator[bytes, None, None]:
         """Yields multipart MJPEG chunks of annotated pose frames to Flask."""
