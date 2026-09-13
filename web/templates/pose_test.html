@@ -1,0 +1,475 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Pose Test | Robot Gesture Control</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg-dark: #0b0f17;
+      --card-bg: rgba(18, 24, 38, 0.85);
+      --card-border: rgba(255, 255, 255, 0.08);
+      --accent-cyan: #06b6d4;
+      --accent-emerald: #10b981;
+      --accent-rose: #f43f5e;
+      --accent-amber: #f59e0b;
+      --text-main: #f1f5f9;
+      --text-muted: #94a3b8;
+      --font-ui: 'Outfit', -apple-system, BlinkMacSystemFont, sans-serif;
+      --font-mono: 'JetBrains Mono', monospace;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      background-color: var(--bg-dark);
+      background-image: 
+        radial-gradient(circle at 15% 15%, rgba(6, 182, 212, 0.08) 0%, transparent 40%),
+        radial-gradient(circle at 85% 85%, rgba(16, 185, 129, 0.06) 0%, transparent 40%);
+      color: var(--text-main);
+      font-family: var(--font-ui);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 24px 16px;
+    }
+
+    header {
+      width: 100%;
+      max-width: 1000px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 20px;
+      padding-bottom: 16px;
+      border-bottom: 1px solid var(--card-border);
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .brand-icon {
+      width: 36px;
+      height: 36px;
+      border-radius: 10px;
+      background: linear-gradient(135deg, var(--accent-cyan), #8b5cf6);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 700;
+      color: #fff;
+      box-shadow: 0 4px 14px rgba(139, 92, 246, 0.3);
+    }
+
+    .brand-title {
+      font-size: 1.25rem;
+      font-weight: 700;
+      letter-spacing: -0.02em;
+      color: #fff;
+    }
+
+    .brand-subtitle {
+      font-size: 0.8rem;
+      color: var(--text-muted);
+      font-family: var(--font-mono);
+    }
+
+    .header-actions {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .nav-btn {
+      padding: 6px 12px;
+      border-radius: 8px;
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid var(--card-border);
+      color: var(--text-main);
+      text-decoration: none;
+      font-size: 0.85rem;
+      font-weight: 500;
+      transition: all 0.2s ease;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .nav-btn:hover {
+      background: rgba(255, 255, 255, 0.1);
+      border-color: var(--accent-cyan);
+      color: #fff;
+    }
+
+    .status-pill {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 6px 14px;
+      border-radius: 9999px;
+      background: rgba(255, 255, 255, 0.04);
+      border: 1px solid var(--card-border);
+      font-size: 0.85rem;
+      font-weight: 500;
+      transition: all 0.3s ease;
+    }
+
+    .status-dot {
+      width: 9px;
+      height: 9px;
+      border-radius: 50%;
+      background: var(--accent-amber);
+      box-shadow: 0 0 10px var(--accent-amber);
+    }
+
+    .status-pill.online .status-dot {
+      background: var(--accent-emerald);
+      box-shadow: 0 0 10px var(--accent-emerald);
+    }
+
+    .status-pill.offline .status-dot {
+      background: var(--accent-rose);
+      box-shadow: 0 0 10px var(--accent-rose);
+    }
+
+    main {
+      width: 100%;
+      max-width: 1000px;
+      display: grid;
+      grid-template-columns: 1fr 340px;
+      gap: 20px;
+      align-items: start;
+    }
+
+    @media (max-width: 860px) {
+      main {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    .feed-column {
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+    }
+
+    .viewport-box {
+      position: relative;
+      width: 100%;
+      aspect-ratio: 400 / 296;
+      background: #000;
+      border-radius: 14px;
+      overflow: hidden;
+      border: 1px solid var(--card-border);
+      box-shadow: 0 15px 35px -10px rgba(0, 0, 0, 0.8);
+    }
+
+    .camera-img {
+      width: 100%;
+      height: 100%;
+      display: block;
+      object-fit: fill;
+    }
+
+    .feed-overlay-badge {
+      position: absolute;
+      top: 36px; /* below top text HUD */
+      left: 12px;
+      display: flex;
+      gap: 8px;
+      z-index: 20;
+      pointer-events: none;
+    }
+
+    .overlay-tag {
+      background: rgba(11, 15, 23, 0.75);
+      backdrop-filter: blur(8px);
+      padding: 4px 10px;
+      border-radius: 6px;
+      font-size: 0.75rem;
+      font-family: var(--font-mono);
+      color: var(--text-main);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+    }
+
+    .side-column {
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+
+    .card {
+      background: var(--card-bg);
+      backdrop-filter: blur(12px);
+      border: 1px solid var(--card-border);
+      border-radius: 14px;
+      padding: 18px;
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+    }
+
+    .card-title {
+      font-size: 0.85rem;
+      font-weight: 600;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+      color: var(--text-muted);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .state-banner {
+      padding: 16px;
+      border-radius: 10px;
+      text-align: center;
+      font-family: var(--font-mono);
+      font-size: 1.25rem;
+      font-weight: 700;
+      letter-spacing: 0.02em;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      transition: all 0.25s ease;
+      background: rgba(255, 255, 255, 0.03);
+      color: var(--text-muted);
+    }
+
+    .state-banner.no-pose {
+      background: rgba(244, 63, 94, 0.12);
+      border-color: rgba(244, 63, 94, 0.35);
+      color: var(--accent-rose);
+    }
+
+    .state-banner.pose-detected {
+      background: rgba(16, 185, 129, 0.12);
+      border-color: rgba(16, 185, 129, 0.35);
+      color: var(--accent-emerald);
+    }
+
+    .state-banner.hand-up {
+      background: rgba(6, 182, 212, 0.15);
+      border-color: rgba(6, 182, 212, 0.45);
+      color: var(--accent-cyan);
+      box-shadow: 0 0 16px rgba(6, 182, 212, 0.2);
+    }
+
+    .state-banner.both-hands {
+      background: rgba(245, 158, 11, 0.15);
+      border-color: rgba(245, 158, 11, 0.45);
+      color: var(--accent-amber);
+      box-shadow: 0 0 16px rgba(245, 158, 11, 0.25);
+    }
+
+    .metrics-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+    }
+
+    .metric-box {
+      background: rgba(0, 0, 0, 0.3);
+      border: 1px solid rgba(255, 255, 255, 0.05);
+      border-radius: 8px;
+      padding: 10px 12px;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+
+    .metric-label {
+      font-size: 0.7rem;
+      font-family: var(--font-mono);
+      color: var(--text-muted);
+      text-transform: uppercase;
+    }
+
+    .metric-value {
+      font-size: 1.15rem;
+      font-weight: 700;
+      color: #fff;
+      font-family: var(--font-mono);
+    }
+
+    .checklist-card {
+      font-size: 0.82rem;
+      line-height: 1.5;
+      color: var(--text-muted);
+    }
+
+    .checklist-title {
+      font-weight: 600;
+      color: var(--text-main);
+      margin-bottom: 8px;
+    }
+
+    .checklist-item {
+      display: flex;
+      align-items: flex-start;
+      gap: 6px;
+      margin-bottom: 6px;
+    }
+
+    footer {
+      margin-top: 24px;
+      font-size: 0.8rem;
+      color: var(--text-muted);
+      text-align: center;
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="brand">
+      <div class="brand-icon">PT</div>
+      <div>
+        <h1 class="brand-title">Pose Test &amp; Distance Validation</h1>
+        <div class="brand-subtitle">MediaPipe Essential Skeleton &bull; Kitchen Range Check</div>
+      </div>
+    </div>
+    <div class="header-actions">
+      <a href="/" class="nav-btn">Live Feed</a>
+      <a href="/calibrate" class="nav-btn">Calibration Wizard</a>
+      <div id="statusPill" class="status-pill">
+        <span class="status-dot"></span>
+        <span id="statusText">Connecting...</span>
+      </div>
+    </div>
+  </header>
+
+  <main>
+    <!-- Viewport Column -->
+    <div class="feed-column">
+      <div class="viewport-box">
+        <div class="feed-overlay-badge">
+          <span class="overlay-tag" id="camFpsBadge">CAM: -- FPS</span>
+          <span class="overlay-tag" id="poseFpsBadge">POSE: -- FPS</span>
+        </div>
+        <img id="poseFeed" class="camera-img" src="/pose_feed" alt="Pose Detection Stream">
+      </div>
+    </div>
+
+    <!-- Side Metrics Column -->
+    <div class="side-column">
+      <div class="card">
+        <div class="card-title">
+          <span>Diagnostic Gesture State</span>
+        </div>
+        
+        <div id="stateBanner" class="state-banner no-pose">
+          NO POSE
+        </div>
+
+        <div class="metrics-grid">
+          <div class="metric-box">
+            <span class="metric-label">Pose Detected</span>
+            <span id="valDetected" class="metric-value">No</span>
+          </div>
+          <div class="metric-box">
+            <span class="metric-label">Confidence</span>
+            <span id="valConfidence" class="metric-value">-- %</span>
+          </div>
+          <div class="metric-box">
+            <span class="metric-label">Camera FPS</span>
+            <span id="valCamFps" class="metric-value">--</span>
+          </div>
+          <div class="metric-box">
+            <span class="metric-label">Pose FPS</span>
+            <span id="valPoseFps" class="metric-value">--</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="card checklist-card">
+        <div class="checklist-title">Distance Validation Tests:</div>
+        <div class="checklist-item">
+          <span>&bull;</span>
+          <span><strong>Close / Middle:</strong> Verify stable shoulder &amp; wrist joints.</span>
+        </div>
+        <div class="checklist-item">
+          <span>&bull;</span>
+          <span><strong>Far Kitchen:</strong> Check if wrists &amp; hips are still tracked.</span>
+        </div>
+        <div class="checklist-item">
+          <span>&bull;</span>
+          <span><strong>Left Hand Up:</strong> Raise left hand above shoulder in kitchen.</span>
+        </div>
+        <div class="checklist-item">
+          <span>&bull;</span>
+          <span><strong>Both Hands Up:</strong> Raise both hands above shoulders.</span>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <footer>
+    Pose Diagnostic Validation Mode &bull; Uses CameraWorker stream &bull; Essential joints only
+  </footer>
+
+  <script>
+    async function updatePoseStatus() {
+      try {
+        const res = await fetch('/pose_status');
+        if (!res.ok) return;
+        const data = await res.json();
+
+        const banner = document.getElementById('stateBanner');
+        const valDetected = document.getElementById('valDetected');
+        const valConfidence = document.getElementById('valConfidence');
+        const valCamFps = document.getElementById('valCamFps');
+        const valPoseFps = document.getElementById('valPoseFps');
+        const camFpsBadge = document.getElementById('camFpsBadge');
+        const poseFpsBadge = document.getElementById('poseFpsBadge');
+        const statusPill = document.getElementById('statusPill');
+        const statusText = document.getElementById('statusText');
+
+        const state = data.pose_state || 'NO POSE';
+        banner.textContent = state;
+
+        banner.className = 'state-banner';
+        if (state === 'NO POSE') {
+          banner.classList.add('no-pose');
+        } else if (state === 'POSE DETECTED') {
+          banner.classList.add('pose-detected');
+        } else if (state === 'BOTH HANDS UP') {
+          banner.classList.add('both-hands');
+        } else {
+          banner.classList.add('hand-up');
+        }
+
+        valDetected.textContent = data.pose_detected ? 'Yes' : 'No';
+        valConfidence.textContent = data.pose_detected ? `${data.confidence}%` : '-- %';
+        valCamFps.textContent = (data.camera_fps || 0) + ' fps';
+        valPoseFps.textContent = (data.pose_fps || 0) + ' fps';
+
+        camFpsBadge.textContent = `CAM: ${data.camera_fps || 0} FPS`;
+        poseFpsBadge.textContent = `POSE: ${data.pose_fps || 0} FPS`;
+
+        statusPill.classList.remove('online', 'offline');
+        if (data.camera_connected) {
+          statusPill.classList.add('online');
+          statusText.textContent = 'Camera Online';
+        } else {
+          statusPill.classList.add('offline');
+          statusText.textContent = 'Camera Offline';
+        }
+      } catch (err) {
+        console.error('Pose status error:', err);
+      }
+    }
+
+    setInterval(updatePoseStatus, 500);
+    updatePoseStatus();
+  </script>
+</body>
+</html>

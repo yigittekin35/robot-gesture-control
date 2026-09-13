@@ -26,3 +26,8 @@ ehthumbs.db
 Desktop.ini
 $RECYCLE.BIN/
 .DS_Store
+
+# Model binaries and test images
+*.task
+*.jpg
+
