@@ -1,4 +1,7 @@
-"""Camera streaming module for ESP32-CAM."""
-from .stream import CameraStream
+﻿"""Camera streaming and worker module for ESP32-CAM."""
+from .camera_worker import CameraWorker
 
-__all__ = ["CameraStream"]
+# Keep CameraStream alias for full backwards compatibility
+CameraStream = CameraWorker
+
+__all__ = ["CameraWorker", "CameraStream"]

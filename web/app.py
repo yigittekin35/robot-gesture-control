@@ -19,7 +19,7 @@ logging.basicConfig(
     datefmt="%H:%M:%S",
 )
 
-from backend.camera import CameraStream
+from backend.camera import CameraWorker
 
 app = Flask(
     __name__,
@@ -27,8 +27,8 @@ app = Flask(
 )
 
 stream_url = os.getenv("ESP32_STREAM_URL", "http://192.168.178.67:81/stream")
-camera = CameraStream(stream_url=stream_url)
-camera.start()
+camera_worker = CameraWorker(stream_url=stream_url)
+camera_worker.start()
 
 
 @app.route("/")
@@ -39,9 +39,9 @@ def index():
 
 @app.route("/video_feed")
 def video_feed():
-    """Video streaming route. Returns multipart MJPEG."""
+    """Video streaming route. Returns multipart MJPEG from CameraWorker."""
     return Response(
-        camera.generate_mjpeg_stream(),
+        camera_worker.generate_mjpeg_stream(),
         mimetype="multipart/x-mixed-replace; boundary=frame",
     )
 
@@ -49,7 +49,7 @@ def video_feed():
 @app.route("/status")
 def status():
     """Returns JSON with current camera connection status and metrics."""
-    return jsonify(camera.get_status_dict())
+    return jsonify(camera_worker.get_status_dict())
 
 
 if __name__ == "__main__":
@@ -58,8 +58,7 @@ if __name__ == "__main__":
     debug = os.getenv("FLASK_DEBUG", "False").lower() in ("true", "1")
 
     print(f"Starting Robot Gesture Control gateway on http://127.0.0.1:{port}")
-    print(f"Streaming target ESP32-CAM: {stream_url}")
     try:
         app.run(host=host, port=port, debug=debug, threaded=True)
     finally:
-        camera.stop()
+        camera_worker.stop()

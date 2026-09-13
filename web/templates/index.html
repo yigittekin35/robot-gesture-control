@@ -285,14 +285,14 @@
 
         statSource.textContent = data.stream_url || '--';
         statResolution.textContent = data.resolution || '--';
-        const camFps = data.camera_fps ?? data.fps ?? 0; const bFps = data.browser_fps ?? 0; statFps.textContent = `${camFps} / ${bFps} fps`;
+        const camFps = data.camera_fps ?? data.fps ?? 0; const bFps = data.web_fps ?? data.browser_fps ?? 0; statFps.textContent = `${camFps} / ${bFps} fps`;
         statMessage.textContent = data.status_message || '--';
         fpsBadge.textContent = `${data.camera_fps ?? data.fps ?? 0} FPS`;
 
         pill.classList.remove('online', 'offline');
         if (data.is_connected) {
           pill.classList.add('online');
-          statusText.textContent = 'ESP32 Connected';
+          statusText.textContent = data.connection_state === 'Live' ? 'ESP32 Connected' : (data.connection_state || 'ESP32 Connected');
         } else {
           pill.classList.add('offline');
           statusText.textContent = data.status_message || 'Connecting...';
@@ -307,4 +307,5 @@
   </script>
 </body>
 </html>
+
 
